@@ -1,0 +1,21 @@
+MooFile MCP Server Integration Test Document
+
+This file is used to verify the upload_and_vectorize_document MCP tool.
+It contains enough Chinese and English text to produce several chunks.
+
+向量化知识库测试文档。
+
+本文件用于验证 MCP 服务器的文档上传与向量化功能。MooFile 是一个基于 moofile
+存储引擎的本地知识库系统，支持普通数据库与向量知识库两种类型。向量知识库
+支持文档上传、分片切分与本地嵌入模型向量化，之后可以通过检索接口进行语义搜索。
+
+The vector knowledge base splits documents into chunks, embeds each chunk with a
+local multilingual sentence transformer model, and stores the embeddings for
+similarity retrieval. The backend worker processes vectorization tasks in the
+background, and each task can be tracked by its status and progress logs.
+
+RAG 检索流程：用户输入查询文本，系统使用相同嵌入模型对查询编码，再与库内
+分片向量计算余弦相似度，按相似度降序返回结果，并依据阈值过滤低质量匹配。
+
+This test verifies that a locally provided file path can be uploaded through the
+MCP tool, vectorized into the target knowledge base, listed, and deleted again.

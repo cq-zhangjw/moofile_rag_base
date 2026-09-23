@@ -129,6 +129,9 @@ db/
 .
 |-- app.py                       # FastAPI アプリケーションとプロセスのエントリーポイント
 |-- requirements.txt            # Python 依存関係
+|-- mcp_servers/
+|   `-- knowledge_mcp_server.py  # MCP サーバー: ナレッジベース CRUD / 文書 / 検索
+|-- logs/                        # 実行時ログ（例: mcp_server.log）
 |-- api/
 |   |-- config.py               # パス、サーバー、モデル、アップロード制限の設定
 |   |-- schemas.py              # API リクエスト・レスポンスモデル
@@ -195,6 +198,11 @@ python app.py
 
 API は `http://127.0.0.1:8888` で待ち受けます。
 
+デフォルトでは、バックエンドはバックグラウンドで MCP サーバーも起動します
+（`http://127.0.0.1:8010/mcp`、Streamable HTTP プロトコル）。無効にするには
+`python app.py --with_mcp false` を実行するか、環境変数 `MOOFILE_WITH_MCP=false`
+を設定してください。詳細は [MCP サーバー](#mcp-サーバー) を参照してください。
+
 - 対話型 API ドキュメント: `http://127.0.0.1:8888/docs`
 - OpenAPI スキーマ: `http://127.0.0.1:8888/openapi.json`
 - ヘルスチェック: `http://127.0.0.1:8888/api/system/health`
@@ -242,7 +250,7 @@ npm run preview
 | `MAX_UPLOAD_MB` | `50` | 1ファイルあたりのアップロード上限 |
 | `STORAGE_QUOTA_GB` | `5.0` | ストレージ状態 API が使用するクォータ |
 
-これらは環境変数ではなく Python 定数です。デプロイ環境ごとにファイルを変更するか、環境変数ベースの設定レイヤーを追加してください。
+これらは環境変数ではなく Python 定数です。デプロイ環境ごとにファイルを変更するか、環境変数ベースの設定レイヤーを追加してください。MCP サーバーはこれとは対照的に環境変数で設定します。詳しくは [MCP サーバー](#mcp-サーバー) を参照してください。
 
 ## API 概要
 
@@ -272,6 +280,46 @@ npm run preview
 | `/api/system` | ヘルスチェック、ストレージ、ローカルモデル、多言語ヘルプ Markdown |
 
 リクエストとレスポンスの詳細は `docs/api_design.md` または実行中の Swagger UI を参照してください。
+
+## MCP サーバー
+
+MooFile には MCP（Model Context Protocol）サーバーが付属しています
+（`mcp_servers/knowledge_mcp_server.py`）。REST API を `requests` でラップし、
+ナレッジベース管理機能を MCP ツールとして公開します。トランスポートは
+Streamable HTTP で、エンドポイントは `http://127.0.0.1:8010/mcp` です。
+
+- `python app.py` はデフォルト（`--with_mcp true`）でバックグラウンド起動します。
+  無効にする場合は `python app.py --with_mcp false` または環境変数
+  `MOOFILE_WITH_MCP=false` を使用します。
+- 起動前に 8010 ポートを確認し、すでにインスタンスが稼働している場合は
+  重複起動せず再利用します。
+- MCP サーバーは独立した子プロセスとして動作し、ログは
+  `logs/mcp_server.log` に出力され、バックエンド終了時に自動終了します。
+- 単独起動: `python mcp_servers/knowledge_mcp_server.py`。
+
+### MCP ツール
+
+| ツール | 依存する REST エンドポイント | 用途 |
+| --- | --- | --- |
+| `create_knowledge_base(name, db_type)` | POST `/api/databases` | ナレッジベースの作成（`normal`/`vector`） |
+| `get_knowledge_base(db_id)` | GET `/api/databases/{id}` | ID でナレッジベース詳細を取得 |
+| `list_knowledge_bases()` | GET `/api/databases` | ゴミ箱にないナレッジベースの一覧 |
+| `rename_knowledge_base(db_id, new_name)` | PUT `/api/databases/{id}` | 名前変更（新しい db_id が生成される場合あり） |
+| `delete_knowledge_base(db_id)` | DELETE `/api/databases/{id}` | 論理削除（ゴミ箱へ） |
+| `get_db_id_by_name(db_name)` | GET `/api/databases` | 名前（大文字小文字を区別しない）から db_id を解決 |
+| `upload_and_vectorize_document(local_path, db_id, ...)` | 文書 upload + vectorize | ローカル文書をアップロードしてベクトル化。`wait=true` で完了まで待機しチャンク数を返す |
+| `list_documents(db_id)` | GET `/api/databases/{id}/documents` | ナレッジベース内の文書一覧 |
+| `delete_document(db_id, doc_id)` | 文書 delete | 文書とそのベクトルチャンクを削除 |
+| `retrieve_knowledge(db_id, query, top_k?, threshold?)` | POST `/api/databases/{id}/retrieval` | セマンティック検索（RAG）。`top_k`/`threshold` 省略時はデータベースの `vectorConfig` 既定値を使用 |
+
+MCP サーバーの設定は環境変数で読み取ります: `MOOFILE_API_BASE`
+（既定 `http://127.0.0.1:8888`）、`MOOFILE_API_TIMEOUT`（既定 `10`）、
+`MOOFILE_MCP_HOST`（既定 `127.0.0.1`）、`MOOFILE_MCP_PORT`（既定 `8010`）。
+
+> `upload_and_vectorize_document` はバックエンドのベクトル化ワーカーが解析できる
+> テキスト形式（`.txt`/`.md`/`.markdown`/`.csv`/`.html`/`.htm`/`.json`/`.log`）
+> のみサポートします。アップロード API は他の拡張子も受け付けますが、
+> それらはベクトル化段階で失敗します。
 
 ## テストと検証
 

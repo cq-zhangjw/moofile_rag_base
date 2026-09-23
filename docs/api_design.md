@@ -1,8 +1,8 @@
 # MooFile 后端 API 设计书
 
-> 版本：v3.2（2026-09-22，与当前实现同步）
-> 技术栈：Python 3.12 + FastAPI 0.141 + moofile 1.2.4 + sentence-transformers 6.0.1 + uvicorn
-> 启动入口：`app.py`（端口 **8888**）
+> 版本：v3.3（2026-09-23，与当前实现同步）
+> 技术栈：Python 3.12 + FastAPI 0.141 + moofile 1.2.4 + sentence-transformers 6.0.1 + uvicorn + fastmcp 4.0.5
+> 启动入口：`app.py`（端口 **8888**；默认同时后台启动 MCP 服务器，见 §6）
 > 前端代理：`web/vite.config.ts` 已将 `/api` 转发至 `http://127.0.0.1:8888`
 > 核心封装：`utils/moofile_util.py`（MooFileUtil）
 > 本地嵌入模型：`models/sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2`（384 维，中英多语言）
@@ -13,7 +13,7 @@
 
 1. **数据库 = 一个完整子目录**。每个数据库对应 `db/<db_id>/`，目录内包含 `db.bson`、`meta.json` 与原始文件目录 `_upload/`，可作为整体备份或迁移。
 2. **单文件多类型**。一个 `db.bson` 内通过 `recordType` 字段区分 `record`（普通数据行 / 向量分片）、`doc`（文档元数据）、`task`（任务记录）三类记录，不再拆多个 bson。
-3. **文档与知识库强关联**。文档元数据只属于它所在的知识库；删除某库文档不影响其它库（修复了旧版 `document_meta` 仅按 `source` 建索引、跨库串号的缺陷，详见 §6）。
+3. **文档与知识库强关联**。文档元数据只属于它所在的知识库；删除某库文档不影响其它库（修复了旧版 `document_meta` 仅按 `source` 建索引、跨库串号的缺陷，详见 §7）。
 4. **上传 ≠ 向量化**。文档上传后仅入库（状态 `uploaded`），分片与向量化由用户手动触发，过程可追踪、可重试。
 5. **统一响应**。所有接口返回 `{code, data, message}`，`code=0` 表示成功。
 6. **以 API 为准对齐前端**。前端字段名、状态枚举、分页结构均以后端返回为准。
@@ -24,8 +24,11 @@
 
 ```
 moofile_base/
-├── app.py                          # FastAPI 入口：建实例、挂 CORS、注册路由、启动任务线程
+├── app.py                          # FastAPI 入口：建实例、挂 CORS、注册路由、启动任务线程；默认后台拉起 MCP 服务器（--with_mcp）
 ├── requirements.txt
+├── mcp_servers/
+│   └── knowledge_mcp_server.py     # MCP 服务器：知识库 CRUD / 文档上传向量化 / 检索（streamable-http，默认 8010）
+├── logs/                           # 运行时日志（如 mcp_server.log）
 ├── utils/
 │   ├── moofile_util.py             # 核心封装：MooFileUtil（CRUD / 向量检索 / 文档操作）
 │   ├── vector_util.py              # SentenceTransformer 单例加载 + encode + rerank
@@ -290,7 +293,51 @@ moofile_base/
 
 ---
 
-## 6. 关键修复：文档与知识库的关联性
+## 6. MCP 服务器（streamable-http）
+
+> 代码：`mcp_servers/knowledge_mcp_server.py`（基于 FastMCP 4.0.5）
+> 端点：`http://127.0.0.1:8010/mcp`（Streamable HTTP 协议）
+
+### 6.1 定位与启动方式
+
+MCP 服务器通过 `requests` 调用本设计书 §5 中的 REST 接口，把知识库能力以 MCP 工具形式暴露给 MCP 客户端（如 AI 客户端/智能体），便于通过工具调用直接管理知识库。它不直接读写数据文件，后端 REST API 是唯一数据通道。
+
+- **随后端自动启动**：`python app.py` 默认（`--with_mcp true`）在后台拉起 MCP 服务器；`python app.py --with_mcp false` 或环境变量 `MOOFILE_WITH_MCP=false` 可关闭。
+- **防重复启动**：启动前探测 MCP 端口，若已有实例在监听则直接复用，不会拉起第二个进程。
+- **生命周期**：MCP 服务器是独立子进程，日志写入 `logs/mcp_server.log`；后端进程退出时自动终止该子进程。
+- **手动启动**：`python mcp_servers/knowledge_mcp_server.py`。
+
+### 6.2 配置（环境变量）
+
+| 环境变量 | 默认值 | 说明 |
+| --- | --- | --- |
+| `MOOFILE_API_BASE` | `http://127.0.0.1:8888` | 后端 REST API 地址 |
+| `MOOFILE_API_TIMEOUT` | `10` | 请求超时（秒） |
+| `MOOFILE_MCP_HOST` | `127.0.0.1` | MCP 服务器绑定地址 |
+| `MOOFILE_MCP_PORT` | `8010` | MCP 服务器端口（`app.py` 拉起子进程时同样读取该变量） |
+
+### 6.3 工具清单
+
+所有工具调用后端接口并解包统一响应 `{code, data, message}`；业务失败（库不存在、同名冲突、文件类型不支持等）会转为 MCP ToolError 返回给客户端。
+
+| 工具 | 对应 REST 接口 | 说明 |
+| --- | --- | --- |
+| `create_knowledge_base(name, db_type)` | POST `/api/databases` | 创建知识库（`normal`/`vector`） |
+| `get_knowledge_base(db_id)` | GET `/api/databases/{id}` | 按 db_id 查库详情 |
+| `list_knowledge_bases()` | GET `/api/databases` | 列出非回收站库 |
+| `rename_knowledge_base(db_id, new_name)` | PUT `/api/databases/{id}` | 重命名（重命名可能生成新 db_id） |
+| `delete_knowledge_base(db_id)` | DELETE `/api/databases/{id}` | 软删除（进回收站） |
+| `get_db_id_by_name(db_name)` | GET `/api/databases` | 按名称（大小写不敏感）解析 db_id |
+| `upload_and_vectorize_document(local_path, db_id, ...)` | POST 文档 upload + vectorize | 上传本地文档并触发向量化；`wait=true` 时轮询任务至结束并返回分片数 |
+| `list_documents(db_id)` | GET `/api/databases/{id}/documents` | 列出库内文档 |
+| `delete_document(db_id, doc_id)` | POST `/api/databases/{id}/documents/delete` | 删除文档及其分片 |
+| `retrieve_knowledge(db_id, query, top_k?, threshold?)` | POST `/api/databases/{id}/retrieval` | 语义检索（RAG）；省略 `top_k`/`threshold` 时使用库内 `vectorConfig` 默认值 |
+
+> 说明：`upload_and_vectorize_document` 仅支持后端向量化 worker 可解析的文本类型（`.txt`/`.md`/`.markdown`/`.csv`/`.html`/`.htm`/`.json`/`.log`）。上传接口虽接受更多扩展名，但其余类型会在向量化阶段失败。
+
+---
+
+## 7. 关键修复：文档与知识库的关联性
 
 **问题**：旧版 `utils/moofile_util.py` 的 `get_document_id(source)` 只按 `source` 在**全局** `document_meta` 表分配文档 ID：
 
@@ -313,7 +360,7 @@ result = self.query_data("document_meta", {"source": source}, ["id"])
 
 ---
 
-## 7. 任务后台执行模型
+## 8. 任务后台执行模型
 
 - 任务在 `task_service` 注册为 `pending`，立即返回任务 ID；
 - 后台线程依次推进：`pending → running → completed/failed/cancelled`，实时更新 `progress` 与 `logs`，并联动更新文档 `docStatus`/`vectorStatus` 与分片 `embedStatus`；
@@ -322,7 +369,7 @@ result = self.query_data("document_meta", {"source": source}, ["id"])
 
 ---
 
-## 8. 与前端的对齐约定
+## 9. 与前端的对齐约定
 
 | 前端期望 | 后端返回 |
 |----------|----------|
@@ -332,7 +379,7 @@ result = self.query_data("document_meta", {"source": source}, ["id"])
 | 空结果 | 返回空数组/空对象，不抛错 |
 | 跨域 | FastAPI 启用 CORS，允许本地前端源 |
 
-### 8.1 v3.0 UI 调整带来的接口影响
+### 9.1 v3.0 UI 调整带来的接口影响
 
 按前端调整需求，以下入口在界面上隐藏，但后端接口保持可用（接口测试仍需覆盖）：
 - 数据库详情页隐藏「分片设置」「索引信息」页签；
@@ -340,7 +387,7 @@ result = self.query_data("document_meta", {"source": source}, ["id"])
 - 侧边栏移除「使用存储空间」卡片（`/api/system/storage` 仍保留供系统页使用）；
 - 顶栏「服务运行正常」移除，改为前端本地实时时钟（不占接口）。
 
-### 8.2 v3.1 前端联动约定
+### 9.2 v3.1 前端联动约定
 
 - 文档上传成功后，文档页立即刷新；存在 `vectorizing` 文档时每 2 秒轮询文档状态，完成后停止；
 - 重命名后同步刷新侧栏与详情；向量化轮询同时刷新文档数、记录数、大小等数据库统计；
@@ -352,10 +399,11 @@ result = self.query_data("document_meta", {"source": source}, ["id"])
 
 ---
 
-## 9. 版本记录
+## 10. 版本记录
 
 - v1.0：全局 `_meta/databases.bson` 注册表 + 每库多文件（data/documents/tasks.bson）。
 - v2.0：数据库=子目录；单文件 `db.bson` 用 `recordType` 区分；`meta.json`。
 - v3.0：落地完整实现；修复文档-知识库关联；补齐全部接口；对齐前端字段与状态枚举；按 UI 调整隐藏分片/索引入口。
 - v3.1：补充文档下载、真实文档/字段计数与两位小数大小；检索默认阈值改为 0.3 并移除 Hybrid Search；默认 overlap 改为 20；同步三语言与前端刷新/导出行为。
-- v3.2（当前）：上传文件迁入各库 `_upload/` 且上传阶段不再设置分块参数；新增数据库级 `vectorConfig` 与设置 Tab；检索使用同库模型；名称规则改为字母/数字/下划线；补充删除确认、帮助 Markdown、重命名与向量化统计刷新；模型改为首次向量使用时按需加载。
+- v3.2（2026-09-22）：上传文件迁入各库 `_upload/` 且上传阶段不再设置分块参数；新增数据库级 `vectorConfig` 与设置 Tab；检索使用同库模型；名称规则改为字母/数字/下划线；补充删除确认、帮助 Markdown、重命名与向量化统计刷新；模型改为首次向量使用时按需加载。
+- v3.3（当前）：新增 MCP 服务器（§6）：基于 FastMCP 的 streamable-http 端点 `http://127.0.0.1:8010/mcp`，暴露知识库 CRUD、文档上传/向量化/删除与语义检索 10 个工具；`app.py` 新增 `--with_mcp` 参数（默认 true）后台拉起 MCP 子进程，支持端口复用检测与退出自动回收，日志写入 `logs/mcp_server.log`。

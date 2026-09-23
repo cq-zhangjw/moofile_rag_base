@@ -129,6 +129,9 @@ Records inside `db.bson` are distinguished by `recordType`:
 .
 |-- app.py                       # FastAPI application and process entry point
 |-- requirements.txt            # Python dependencies
+|-- mcp_servers/
+|   `-- knowledge_mcp_server.py  # MCP server: knowledge base CRUD / documents / retrieval
+|-- logs/                        # Runtime logs (e.g. mcp_server.log)
 |-- api/
 |   |-- config.py               # Paths, server settings, model, upload limits
 |   |-- schemas.py              # API request/response schemas
@@ -195,6 +198,11 @@ python app.py
 
 The API listens on `http://127.0.0.1:8888`.
 
+By default the backend also launches the MCP server in the background at
+`http://127.0.0.1:8010/mcp` (Streamable HTTP). Pass `--with_mcp false` or set
+`MOOFILE_WITH_MCP=false` to disable it. See the [MCP Server](#mcp-server)
+section for details.
+
 - Interactive API documentation: `http://127.0.0.1:8888/docs`
 - OpenAPI schema: `http://127.0.0.1:8888/openapi.json`
 - Health endpoint: `http://127.0.0.1:8888/api/system/health`
@@ -242,7 +250,7 @@ Runtime settings are currently defined in `api/config.py`:
 | `MAX_UPLOAD_MB` | `50` | Per-file upload limit |
 | `STORAGE_QUOTA_GB` | `5.0` | Quota used by the storage status API |
 
-These values are Python constants rather than environment variables. Change the file or add an environment-backed configuration layer for deployment-specific settings.
+These values are Python constants rather than environment variables. Change the file or add an environment-backed configuration layer for deployment-specific settings. The MCP server, by contrast, is configured through environment variables — see the [MCP Server](#mcp-server) section.
 
 ## API Overview
 
@@ -272,6 +280,45 @@ Main endpoint groups:
 | `/api/system` | Health, storage, available local models, and localized help Markdown |
 
 See `docs/api_design.md` or the live Swagger UI for request and response details.
+
+## MCP Server
+
+MooFile ships an MCP (Model Context Protocol) server at
+`mcp_servers/knowledge_mcp_server.py`. It wraps the REST API with `requests`
+and exposes knowledge-base management as MCP tools over the Streamable HTTP
+transport at `http://127.0.0.1:8010/mcp`.
+
+- `python app.py` launches it in the background by default (`--with_mcp true`);
+  use `python app.py --with_mcp false` or `MOOFILE_WITH_MCP=false` to disable it.
+- Port 8010 is probed before startup; an already-running instance is reused
+  instead of starting a duplicate.
+- The MCP server runs as a separate child process, logs to `logs/mcp_server.log`,
+  and is terminated automatically when the backend exits.
+- Run it standalone with `python mcp_servers/knowledge_mcp_server.py`.
+
+### MCP tools
+
+| Tool | Backed by | Purpose |
+| --- | --- | --- |
+| `create_knowledge_base(name, db_type)` | POST `/api/databases` | Create a knowledge base (`normal`/`vector`) |
+| `get_knowledge_base(db_id)` | GET `/api/databases/{id}` | Fetch knowledge base details by id |
+| `list_knowledge_bases()` | GET `/api/databases` | List non-trashed knowledge bases |
+| `rename_knowledge_base(db_id, new_name)` | PUT `/api/databases/{id}` | Rename a knowledge base (may yield a new db_id) |
+| `delete_knowledge_base(db_id)` | DELETE `/api/databases/{id}` | Soft-delete a knowledge base into the trash |
+| `get_db_id_by_name(db_name)` | GET `/api/databases` | Resolve the db_id from an exact name |
+| `upload_and_vectorize_document(local_path, db_id, ...)` | document upload + vectorize | Upload a local document and vectorize it; with `wait=true` it returns the final chunk count |
+| `list_documents(db_id)` | GET `/api/databases/{id}/documents` | List documents in a knowledge base |
+| `delete_document(db_id, doc_id)` | document delete | Delete a document and its vectorized chunks |
+| `retrieve_knowledge(db_id, query, top_k?, threshold?)` | POST `/api/databases/{id}/retrieval` | Semantic (RAG) retrieval; omitted `top_k`/`threshold` fall back to the database `vectorConfig` |
+
+MCP server settings are read from environment variables: `MOOFILE_API_BASE`
+(default `http://127.0.0.1:8888`), `MOOFILE_API_TIMEOUT` (default `10`),
+`MOOFILE_MCP_HOST` (default `127.0.0.1`), `MOOFILE_MCP_PORT` (default `8010`).
+
+> `upload_and_vectorize_document` accepts only the text types the backend
+> vectorization worker can parse (`.txt`, `.md`, `.markdown`, `.csv`, `.html`,
+> `.htm`, `.json`, `.log`); other uploadable extensions fail at the
+> vectorization step.
 
 ## Testing and Validation
 

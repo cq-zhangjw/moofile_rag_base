@@ -129,6 +129,9 @@ db/
 .
 |-- app.py                       # FastAPI 应用与进程入口
 |-- requirements.txt            # Python 依赖
+|-- mcp_servers/
+|   `-- knowledge_mcp_server.py  # MCP 服务器：知识库 CRUD / 文档 / 检索
+|-- logs/                        # 运行时日志（如 mcp_server.log）
 |-- api/
 |   |-- config.py               # 路径、服务器、模型与上传限制配置
 |   |-- schemas.py              # API 请求与响应模型
@@ -195,6 +198,11 @@ python app.py
 
 API 监听于 `http://127.0.0.1:8888`。
 
+默认情况下，后端还会在后台启动 MCP 服务器，地址为
+`http://127.0.0.1:8010/mcp`（Streamable HTTP 协议）。如需关闭，请使用
+`python app.py --with_mcp false` 或设置环境变量 `MOOFILE_WITH_MCP=false`。
+详见下文 [MCP 服务器](#mcp-服务器) 一节。
+
 - 交互式 API 文档：`http://127.0.0.1:8888/docs`
 - OpenAPI Schema：`http://127.0.0.1:8888/openapi.json`
 - 健康检查接口：`http://127.0.0.1:8888/api/system/health`
@@ -242,7 +250,7 @@ npm run preview
 | `MAX_UPLOAD_MB` | `50` | 单文件上传限制 |
 | `STORAGE_QUOTA_GB` | `5.0` | 存储状态 API 使用的配额 |
 
-这些值目前是 Python 常量，而非环境变量。针对不同部署环境，可以直接修改该文件，或增加基于环境变量的配置层。
+这些值目前是 Python 常量，而非环境变量。针对不同部署环境，可以直接修改该文件，或增加基于环境变量的配置层。MCP 服务器则通过环境变量配置，详见上文 [MCP 服务器](#mcp-服务器) 一节。
 
 ## API 概览
 
@@ -272,6 +280,42 @@ npm run preview
 | `/api/system` | 健康检查、存储状态、本地模型和本地化帮助 Markdown |
 
 请求与响应详情请参阅 `docs/api_design.md` 或在线 Swagger UI。
+
+## MCP 服务器
+
+仓库附带一个 MCP（Model Context Protocol）服务器，位于
+`mcp_servers/knowledge_mcp_server.py`。它使用 `requests` 封装 REST API，以
+MCP 工具的形式把知识库管理能力暴露给 MCP 客户端，传输协议为 Streamable HTTP，
+端点地址 `http://127.0.0.1:8010/mcp`。
+
+- `python app.py` 默认（`--with_mcp true`）会在后台拉起该服务器；
+  使用 `python app.py --with_mcp false` 或环境变量 `MOOFILE_WITH_MCP=false` 可关闭。
+- 启动前会探测 8010 端口：若已有实例在监听则直接复用，不会启动第二个进程。
+- MCP 服务器是独立子进程，日志写入 `logs/mcp_server.log`，后端退出时自动终止。
+- 也可单独启动：`python mcp_servers/knowledge_mcp_server.py`。
+
+### MCP 工具
+
+| 工具 | 依赖的 REST 接口 | 用途 |
+| --- | --- | --- |
+| `create_knowledge_base(name, db_type)` | POST `/api/databases` | 创建知识库（`normal`/`vector`） |
+| `get_knowledge_base(db_id)` | GET `/api/databases/{id}` | 按 db_id 查库详情 |
+| `list_knowledge_bases()` | GET `/api/databases` | 列出非回收站知识库 |
+| `rename_knowledge_base(db_id, new_name)` | PUT `/api/databases/{id}` | 重命名知识库（可能生成新 db_id） |
+| `delete_knowledge_base(db_id)` | DELETE `/api/databases/{id}` | 软删除知识库（进回收站） |
+| `get_db_id_by_name(db_name)` | GET `/api/databases` | 按名称（大小写不敏感）解析 db_id |
+| `upload_and_vectorize_document(local_path, db_id, ...)` | 文档 upload + vectorize | 上传本地文档并触发向量化；`wait=true` 时等待任务结束并返回分片数 |
+| `list_documents(db_id)` | GET `/api/databases/{id}/documents` | 列出库内文档 |
+| `delete_document(db_id, doc_id)` | 文档 delete | 删除文档及其向量分片 |
+| `retrieve_knowledge(db_id, query, top_k?, threshold?)` | POST `/api/databases/{id}/retrieval` | 语义检索（RAG）；省略 `top_k`/`threshold` 时使用库内 `vectorConfig` 默认值 |
+
+MCP 服务器配置通过环境变量读取：`MOOFILE_API_BASE`（默认 `http://127.0.0.1:8888`）、
+`MOOFILE_API_TIMEOUT`（默认 `10`）、`MOOFILE_MCP_HOST`（默认 `127.0.0.1`）、
+`MOOFILE_MCP_PORT`（默认 `8010`）。
+
+> `upload_and_vectorize_document` 仅支持后端向量化 worker 可解析的文本类型
+> （`.txt`/`.md`/`.markdown`/`.csv`/`.html`/`.htm`/`.json`/`.log`）；
+> 上传接口虽接受更多扩展名，但其余类型会在向量化阶段失败。
 
 ## 测试与验证
 

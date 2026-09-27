@@ -1,0 +1,9 @@
+{
+	"servers": {
+		"moofile_RAG": {
+			"url": "http://127.0.0.1:8010/mcp",
+			"type": "http"
+		}
+	},
+	"inputs": []
+}

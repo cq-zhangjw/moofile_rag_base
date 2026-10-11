@@ -17,6 +17,8 @@ from contextlib import asynccontextmanager
 import uvicorn
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
 
 from api import config
 from api.exceptions import BizError, biz_exception_handler, unhandled_exception_handler
@@ -122,9 +124,21 @@ for r in (
     app.include_router(r)
 
 
-@app.get("/")
+# Web admin UI (built by web/, served at /). Mounted after the API routers so
+# /api/* and /docs keep priority; "/" returns the SPA index.
+WEB_DIST = os.path.join(config.BASE_DIR, "web", "dist")
+
+
+@app.get("/", include_in_schema=False)
 def root():
+    index = os.path.join(WEB_DIST, "index.html")
+    if os.path.isfile(index):
+        return FileResponse(index)
     return {"code": 0, "data": {"name": "MooFile API", "version": "3.0.0"}, "message": "ok"}
+
+
+if os.path.isdir(WEB_DIST):
+    app.mount("/", StaticFiles(directory=WEB_DIST, html=True), name="web")
 
 
 if __name__ == "__main__":

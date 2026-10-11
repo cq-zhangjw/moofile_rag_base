@@ -25,10 +25,18 @@ Configuration (environment variables):
 - MOOFILE_API_TIMEOUT  request timeout in seconds, default 10
 - MOOFILE_MCP_HOST    host to bind the MCP server, default 127.0.0.1
 - MOOFILE_MCP_PORT    port to bind the MCP server, default 8010
+- MOOFILE_MCP_TRANSPORT  MCP transport: "streamable-http" (default) or "stdio"
 """
 import mimetypes
 import os
 import time
+
+try:
+    from dotenv import load_dotenv
+
+    load_dotenv(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), ".env"))
+except ImportError:  # pragma: no cover - dotenv is optional
+    pass
 
 import requests
 from fastmcp import FastMCP
@@ -38,6 +46,7 @@ API_TIMEOUT = float(os.environ.get("MOOFILE_API_TIMEOUT", "10"))
 
 MCP_HOST = os.environ.get("MOOFILE_MCP_HOST", "127.0.0.1")
 MCP_PORT = int(os.environ.get("MOOFILE_MCP_PORT", "8010"))
+MCP_TRANSPORT = os.environ.get("MOOFILE_MCP_TRANSPORT", "streamable-http")
 
 # The MooFile API wraps every response in {code, data, message}; code 0 means success.
 OK_CODE = 0
@@ -364,9 +373,12 @@ def retrieve_knowledge(
 
 
 if __name__ == "__main__":
-    mcp.run(
-        transport="streamable-http",
-        host=MCP_HOST,
-        port=MCP_PORT,
-        show_banner=False,
-    )
+    if MCP_TRANSPORT == "stdio":
+        mcp.run(transport="stdio", show_banner=False)
+    else:
+        mcp.run(
+            transport="streamable-http",
+            host=MCP_HOST,
+            port=MCP_PORT,
+            show_banner=False,
+        )

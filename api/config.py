@@ -1,11 +1,20 @@
 """Central configuration for the MooFile backend."""
 import os
 
+try:
+    from dotenv import load_dotenv
+
+    load_dotenv(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), ".env"))
+except ImportError:  # pragma: no cover - dotenv is optional
+    pass
+
 # Project root (the directory that contains this api/ package)
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
-# Data root: db/<db_id>/ holds each database subdirectory
-DB_DIR = os.path.join(BASE_DIR, "db")
+# Data root: db/<db_id>/ holds each database subdirectory.
+# MOOFILE_DB_DIR lets an external host unify the data location (e.g. a shared
+# db/ folder) without moving this project.
+DB_DIR = os.environ.get("MOOFILE_DB_DIR") or os.path.join(BASE_DIR, "db")
 
 # Legacy upload root used by databases created before uploads moved in-db.
 LEGACY_UPLOAD_DIR = os.path.join(DB_DIR, "_uploads")

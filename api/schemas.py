@@ -11,6 +11,7 @@ class CreateDatabaseReq(BaseModel):
 
 class RenameDatabaseReq(BaseModel):
     name: str
+    description: Optional[str] = None
 
 
 class FilterCondition(BaseModel):

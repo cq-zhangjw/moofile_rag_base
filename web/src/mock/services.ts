@@ -35,8 +35,10 @@ export async function createDatabase(name: string, type: 'normal' | 'vector', de
   return { ...d, id: d.id || d._id }
 }
 
-export async function renameDatabase(id: string, name: string): Promise<DatabaseInfo> {
-  const data = await apiFetch(`/api/databases/${id}`, { method: 'PUT', body: JSON.stringify({ name }) })
+export async function renameDatabase(id: string, name: string, description?: string): Promise<DatabaseInfo> {
+  const body: Record<string, any> = { name }
+  if (description !== undefined) body.description = description
+  const data = await apiFetch(`/api/databases/${id}`, { method: 'PUT', body: JSON.stringify(body) })
   return { ...data, id: data.id || data._id }
 }
 

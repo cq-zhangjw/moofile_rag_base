@@ -187,7 +187,7 @@ moofile_base/
 | GET | `/api/databases` | 列出非回收站库 | `data`: `[{id,name,type,description,recordCount,documentCount,fieldCount,sizeMB,updatedAt,createdAt}]` |
 | POST | `/api/databases` | 创建库 | body `{name, type, description?}`；description 可选、最长 200 字；同名 40901 |
 | GET | `/api/databases/{id}` | 库详情（含记录/文档/字段计数与大小） | |
-| PUT | `/api/databases/{id}` | 重命名 | body `{name}` |
+| PUT | `/api/databases/{id}` | 重命名 / 修改描述 | body `{name, description?}`；仅传 `name` 时保留原描述 |
 | DELETE | `/api/databases/{id}` | 软删除（`meta.json.trashed=true`） | |
 | GET | `/api/databases/{id}/vector-config` | 读取向量库默认配置 | 仅向量库 |
 | PUT | `/api/databases/{id}/vector-config` | 保存模型、分块、Top K 与阈值 | 切换模型会清除旧向量并将文档重置为待向量化 |

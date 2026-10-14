@@ -3,6 +3,7 @@ import os
 import re
 import shutil
 from datetime import datetime, timezone
+from typing import Optional
 
 from moofile import Collection
 
@@ -186,49 +187,59 @@ def create_database(name: str, db_type: str, description: str = "") -> dict:
     return get_database(db_id)
 
 
-def rename_database(db_id: str, new_name: str) -> dict:
+def rename_database(db_id: str, new_name: str, description: Optional[str] = None) -> dict:
     store.require_db(db_id)
     meta = store.read_meta(db_id)
     _validate_name(new_name)
-    if meta.get("name") == new_name:
+
+    new_description = description.strip()[:200] if description is not None else None
+    name_changed = meta.get("name") != new_name
+    desc_changed = new_description is not None and new_description != meta.get("description", "")
+    if not name_changed and not desc_changed:
         return get_database(db_id)
 
-    new_db_id = store.new_db_id(new_name)
-    if os.path.exists(store.db_dir(new_db_id)):
-        raise ConflictError(f"数据库 ID 已存在: {new_db_id}")
-
-    for other in store.list_db_dirs():
-        if other == db_id:
-            continue
-        m = store.read_meta(other)
-        if str(m.get("name", "")).casefold() == new_name.casefold():
-            raise ConflictError(f"同名数据库已存在: {new_name}")
-
+    new_db_id = db_id
     is_vector = meta.get("type") == "vector"
-    with store.open_collection(db_id, is_vector) as col:
-        active_tasks = col.find({"recordType": "task"}).to_list()
-    if any(task.get("status") in ("pending", "running") for task in active_tasks):
-        raise ConflictError("数据库存在进行中任务，暂时无法重命名")
+    if name_changed:
+        new_db_id = store.new_db_id(new_name)
+        if os.path.exists(store.db_dir(new_db_id)):
+            raise ConflictError(f"数据库 ID 已存在: {new_db_id}")
 
-    legacy_upload_dir = os.path.join(config.LEGACY_UPLOAD_DIR, db_id)
-    if os.path.isdir(legacy_upload_dir):
-        os.makedirs(store.upload_dir(db_id), exist_ok=True)
-        for filename in os.listdir(legacy_upload_dir):
-            source = os.path.join(legacy_upload_dir, filename)
-            target = os.path.join(store.upload_dir(db_id), filename)
-            if not os.path.exists(target):
-                shutil.move(source, target)
-        shutil.rmtree(legacy_upload_dir)
+        for other in store.list_db_dirs():
+            if other == db_id:
+                continue
+            m = store.read_meta(other)
+            if str(m.get("name", "")).casefold() == new_name.casefold():
+                raise ConflictError(f"同名数据库已存在: {new_name}")
 
-    shutil.move(store.db_dir(db_id), store.db_dir(new_db_id))
-    meta["name"] = new_name
-    meta["id"] = new_db_id
+        with store.open_collection(db_id, is_vector) as col:
+            active_tasks = col.find({"recordType": "task"}).to_list()
+        if any(task.get("status") in ("pending", "running") for task in active_tasks):
+            raise ConflictError("数据库存在进行中任务，暂时无法重命名")
+
+        legacy_upload_dir = os.path.join(config.LEGACY_UPLOAD_DIR, db_id)
+        if os.path.isdir(legacy_upload_dir):
+            os.makedirs(store.upload_dir(db_id), exist_ok=True)
+            for filename in os.listdir(legacy_upload_dir):
+                source = os.path.join(legacy_upload_dir, filename)
+                target = os.path.join(store.upload_dir(db_id), filename)
+                if not os.path.exists(target):
+                    shutil.move(source, target)
+            shutil.rmtree(legacy_upload_dir)
+
+        shutil.move(store.db_dir(db_id), store.db_dir(new_db_id))
+        meta["name"] = new_name
+        meta["id"] = new_db_id
+
+    if new_description is not None:
+        meta["description"] = new_description
     meta["updatedAt"] = _now()
     store.write_meta(new_db_id, meta)
 
-    with store.open_collection(new_db_id, is_vector) as col:
-        for row in col.find({"dbId": db_id}).to_list():
-            col.update_one({"_id": row["_id"]}, set={"dbId": new_db_id})
+    if name_changed:
+        with store.open_collection(new_db_id, is_vector) as col:
+            for row in col.find({"dbId": db_id}).to_list():
+                col.update_one({"_id": row["_id"]}, set={"dbId": new_db_id})
     return get_database(new_db_id)
 
 

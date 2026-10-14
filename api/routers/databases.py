@@ -35,7 +35,7 @@ def update_vector_config(db_id: str, req: VectorConfigReq):
 
 @router.put("/{db_id}")
 def rename_database(db_id: str, req: RenameDatabaseReq):
-    return responses.ok(db_service.rename_database(db_id, req.name))
+    return responses.ok(db_service.rename_database(db_id, req.name, req.description))
 
 
 @router.delete("/{db_id}")

@@ -2,7 +2,7 @@
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { NIcon, NInput, NDropdown, NBadge, NTooltip, NButton, NPopconfirm, useMessage } from 'naive-ui'
-import { Add, Search, TrashBinOutline, FolderOutline, DocumentTextOutline } from '@vicons/ionicons5'
+import { Add, Search, TrashBinOutline, FolderOutline, DocumentTextOutline, ChevronDown } from '@vicons/ionicons5'
 import { listDatabases, deleteDatabase } from '../../mock/services'
 import { state } from '../../mock/store'
 import type { DatabaseInfo } from '../../mock/store'
@@ -58,6 +58,14 @@ const groups = computed(() => {
   return out
 })
 
+const collapsed = ref<Set<string>>(new Set())
+const toggleGroup = (key: string) => {
+  const next = new Set(collapsed.value)
+  if (next.has(key)) next.delete(key)
+  else next.add(key)
+  collapsed.value = next
+}
+
 const currentId = computed(() => (route.params.id as string) || '')
 
 const openDb = (id: string) => router.push(`/db/${id}`)
@@ -95,28 +103,35 @@ const onRenamed = async (renamed: DatabaseInfo) => {
       <template #prefix><n-icon><Search /></n-icon></template>
     </n-input>
 
-    <div class="section-title">{{ t('sidebar.dbList') }}</div>
     <div class="db-list">
       <div v-for="group in groups" :key="group.key">
-        <div class="db-group-title">{{ group.label }} · {{ group.items.length }}</div>
-        <div
-          v-for="db in group.items"
-          :key="db.id"
-          class="db-item"
-          :class="{ active: db.id === currentId }"
-          @click="openDb(db.id)"
-        >
-          <div class="db-main">
-            <span class="db-name">{{ db.name }}</span>
-            <MFTypeTag :type="db.type" />
-          </div>
-          <div v-if="db.description" class="db-desc" :title="db.description">{{ db.description }}</div>
-          <div class="db-sub">
-            <span>{{ t('common.records', { count: (db.recordCount || 0).toLocaleString(locale) }) }} · {{ (db.sizeMB || 0).toFixed(2) }} MB</span>
-            <span class="db-time">{{ relativeTime(db.updatedAt, locale) }}</span>
-            <n-dropdown trigger="click" :options="rowOptions(db)" @click.stop>
-              <n-button text size="tiny" class="row-more" @click.stop>···</n-button>
-            </n-dropdown>
+        <div class="db-group-title" @click="toggleGroup(group.key)">
+          <n-icon size="12" class="group-caret" :class="{ collapsed: collapsed.has(group.key) }">
+            <ChevronDown />
+          </n-icon>
+          <span class="group-label">{{ group.label }}</span>
+          <span class="group-count">{{ group.items.length }}</span>
+        </div>
+        <div v-show="!collapsed.has(group.key)">
+          <div
+            v-for="db in group.items"
+            :key="db.id"
+            class="db-item"
+            :class="{ active: db.id === currentId }"
+            @click="openDb(db.id)"
+          >
+            <div class="db-main">
+              <span class="db-name">{{ db.name }}</span>
+              <MFTypeTag :type="db.type" />
+            </div>
+            <div v-if="db.description" class="db-desc" :title="db.description">{{ db.description }}</div>
+            <div class="db-sub">
+              <span>{{ t('common.records', { count: (db.recordCount || 0).toLocaleString(locale) }) }} · {{ (db.sizeMB || 0).toFixed(2) }} MB</span>
+              <span class="db-time">{{ relativeTime(db.updatedAt, locale) }}</span>
+              <n-dropdown trigger="click" :options="rowOptions(db)" @click.stop>
+                <n-button text size="tiny" class="row-more" @click.stop>···</n-button>
+              </n-dropdown>
+            </div>
           </div>
         </div>
       </div>
@@ -155,10 +170,19 @@ const onRenamed = async (renamed: DatabaseInfo) => {
   margin: 20px 0 8px 4px;
 }
 .db-group-title {
-  font-size: 11px; color: #9CA3AF; font-weight: 600; letter-spacing: 0.03em;
-  margin: 10px 4px 4px;
+  display: flex; align-items: center; gap: 4px;
+  font-size: 11px; color: #6B7280; font-weight: 600; letter-spacing: 0.03em;
+  margin: 12px 4px 4px; padding: 3px 6px; border-radius: 6px;
+  cursor: pointer; user-select: none;
 }
-.db-group-title:first-child { margin-top: 0; }
+.db-group-title:first-child { margin-top: 8px; }
+.db-group-title:hover { color: #374151; background: #F3F4F6; }
+.group-caret { transition: transform 0.15s ease; flex-shrink: 0; }
+.group-caret.collapsed { transform: rotate(-90deg); }
+.group-count {
+  margin-left: auto; font-size: 10px; color: #9CA3AF; font-weight: 500;
+  background: #F3F4F6; border-radius: 8px; padding: 0 6px; line-height: 16px;
+}
 .db-list { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
 .db-item {
   border-radius: 8px;

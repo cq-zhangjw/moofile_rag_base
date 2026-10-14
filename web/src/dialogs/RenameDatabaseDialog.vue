@@ -10,6 +10,7 @@ const emit = defineEmits<{ (e: 'update:visible', v: boolean): void; (e: 'renamed
 const message = useMessage()
 const { t } = useI18n()
 const name = ref('')
+const description = ref('')
 const submitting = ref(false)
 const nameError = computed(() => {
   if (!name.value) return t('wizard.nameRequired')
@@ -18,7 +19,12 @@ const nameError = computed(() => {
 })
 watch(
   () => props.visible,
-  (v) => { if (v && props.db) name.value = props.db.name }
+  (v) => {
+    if (v && props.db) {
+      name.value = props.db.name
+      description.value = props.db.description || ''
+    }
+  }
 )
 const close = () => emit('update:visible', false)
 const submit = async () => {
@@ -26,7 +32,7 @@ const submit = async () => {
   if (nameError.value) { message.error(nameError.value); return }
   submitting.value = true
   try {
-    const renamed = await renameDatabase(props.db.id, name.value.trim())
+    const renamed = await renameDatabase(props.db.id, name.value.trim(), description.value.trim())
     message.success(t('renameDatabase.success'))
     emit('renamed', renamed)
     close()
@@ -39,9 +45,23 @@ const submit = async () => {
 </script>
 
 <template>
-  <n-modal :show="visible" @update:show="(v: boolean) => emit('update:visible', v)" @close="close" preset="card" style="width:400px;" :title="t('renameDatabase.title')" :bordered="false">
-    <n-input v-model:value="name" :placeholder="t('renameDatabase.placeholder')" :status="nameError && name ? 'error' : undefined" />
-    <div v-if="nameError && name" style="font-size:12px;color:#DC2626;margin-top:6px;">{{ nameError }}</div>
+  <n-modal :show="visible" @update:show="(v: boolean) => emit('update:visible', v)" @close="close" preset="card" style="width:480px;" :title="t('renameDatabase.title')" :bordered="false">
+    <n-form label-placement="top">
+      <n-form-item :label="t('wizard.name')">
+        <n-input v-model:value="name" :placeholder="t('renameDatabase.placeholder')" :status="nameError && name ? 'error' : undefined" />
+        <div v-if="nameError && name" style="font-size:12px;color:#DC2626;margin-top:6px;">{{ nameError }}</div>
+      </n-form-item>
+      <n-form-item :label="t('wizard.description')">
+        <n-input
+          v-model:value="description"
+          type="textarea"
+          :rows="3"
+          :maxlength="200"
+          show-count
+          :placeholder="t('wizard.descriptionPlaceholder')"
+        />
+      </n-form-item>
+    </n-form>
     <template #footer>
       <div style="display:flex;justify-content:flex-end;gap:8px;">
         <n-button @click="close">{{ t('common.cancel') }}</n-button>

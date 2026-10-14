@@ -43,7 +43,19 @@ onUnmounted(() => window.removeEventListener('mf:refresh', load))
 const filtered = computed(() => {
   const kw = keyword.value.trim().toLowerCase()
   if (!kw) return dbs.value
-  return dbs.value.filter((d) => d.name.toLowerCase().includes(kw))
+  return dbs.value.filter((d) =>
+    d.name.toLowerCase().includes(kw) ||
+    (d.description || '').toLowerCase().includes(kw)
+  )
+})
+
+const groups = computed(() => {
+  const vector = filtered.value.filter((d) => d.type === 'vector')
+  const normal = filtered.value.filter((d) => d.type !== 'vector')
+  const out: { key: string; label: string; items: DatabaseInfo[] }[] = []
+  if (vector.length) out.push({ key: 'vector', label: t('sidebar.groupVector'), items: vector })
+  if (normal.length) out.push({ key: 'normal', label: t('sidebar.groupNormal'), items: normal })
+  return out
 })
 
 const currentId = computed(() => (route.params.id as string) || '')
@@ -85,23 +97,27 @@ const onRenamed = async (renamed: DatabaseInfo) => {
 
     <div class="section-title">{{ t('sidebar.dbList') }}</div>
     <div class="db-list">
-      <div
-        v-for="db in filtered"
-        :key="db.id"
-        class="db-item"
-        :class="{ active: db.id === currentId }"
-        @click="openDb(db.id)"
-      >
-        <div class="db-main">
-          <span class="db-name">{{ db.name }}</span>
-          <MFTypeTag :type="db.type" />
-        </div>
-        <div class="db-sub">
-          <span>{{ t('common.records', { count: (db.recordCount || 0).toLocaleString(locale) }) }} · {{ (db.sizeMB || 0).toFixed(2) }} MB</span>
-          <span class="db-time">{{ relativeTime(db.updatedAt, locale) }}</span>
-          <n-dropdown trigger="click" :options="rowOptions(db)" @click.stop>
-            <n-button text size="tiny" class="row-more" @click.stop>···</n-button>
-          </n-dropdown>
+      <div v-for="group in groups" :key="group.key">
+        <div class="db-group-title">{{ group.label }} · {{ group.items.length }}</div>
+        <div
+          v-for="db in group.items"
+          :key="db.id"
+          class="db-item"
+          :class="{ active: db.id === currentId }"
+          @click="openDb(db.id)"
+        >
+          <div class="db-main">
+            <span class="db-name">{{ db.name }}</span>
+            <MFTypeTag :type="db.type" />
+          </div>
+          <div v-if="db.description" class="db-desc" :title="db.description">{{ db.description }}</div>
+          <div class="db-sub">
+            <span>{{ t('common.records', { count: (db.recordCount || 0).toLocaleString(locale) }) }} · {{ (db.sizeMB || 0).toFixed(2) }} MB</span>
+            <span class="db-time">{{ relativeTime(db.updatedAt, locale) }}</span>
+            <n-dropdown trigger="click" :options="rowOptions(db)" @click.stop>
+              <n-button text size="tiny" class="row-more" @click.stop>···</n-button>
+            </n-dropdown>
+          </div>
         </div>
       </div>
       <div v-if="!filtered.length" class="empty">{{ t('sidebar.noMatch') }}</div>
@@ -138,6 +154,11 @@ const onRenamed = async (renamed: DatabaseInfo) => {
   font-size: 12px; color: #6B7280; font-weight: 500;
   margin: 20px 0 8px 4px;
 }
+.db-group-title {
+  font-size: 11px; color: #9CA3AF; font-weight: 600; letter-spacing: 0.03em;
+  margin: 10px 4px 4px;
+}
+.db-group-title:first-child { margin-top: 0; }
 .db-list { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
 .db-item {
   border-radius: 8px;
@@ -155,6 +176,11 @@ const onRenamed = async (renamed: DatabaseInfo) => {
 }
 .db-main { display: flex; align-items: center; gap: 8px; }
 .db-name { font-size: 14px; font-weight: 500; color: #111827; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.db-desc {
+  margin-top: 3px; font-size: 12px; color: #6B7280; line-height: 1.4;
+  overflow: hidden; text-overflow: ellipsis; display: -webkit-box;
+  -webkit-line-clamp: 2; -webkit-box-orient: vertical; word-break: break-all;
+}
 .db-sub { display: flex; align-items: center; margin-top: 4px; font-size: 12px; color: #6B7280; }
 .db-time { margin-left: auto; color: #9CA3AF; }
 .row-more { opacity: 0; padding: 0 4px; margin-left: 4px; }

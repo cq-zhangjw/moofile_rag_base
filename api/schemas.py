@@ -6,6 +6,7 @@ from pydantic import BaseModel, Field
 class CreateDatabaseReq(BaseModel):
     name: str
     type: str = "normal"  # normal | vector
+    description: Optional[str] = ""
 
 
 class RenameDatabaseReq(BaseModel):

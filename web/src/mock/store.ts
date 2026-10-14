@@ -5,6 +5,7 @@ export interface DatabaseInfo {
   id: string;
   name: string;
   type: 'normal' | 'vector';
+  description?: string;
   recordCount: number;
   documentCount: number;
   fieldCount: number;

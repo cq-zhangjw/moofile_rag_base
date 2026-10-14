@@ -127,6 +127,7 @@ def _decorate(db_id: str, meta: dict) -> dict:
         "id": db_id,
         "name": meta.get("name"),
         "type": meta.get("type", "normal"),
+        "description": meta.get("description", ""),
         "recordCount": count,
         "documentCount": document_count,
         "fieldCount": field_count,
@@ -145,10 +146,11 @@ def get_database(db_id: str) -> dict:
     return _decorate(db_id, store.read_meta(db_id))
 
 
-def create_database(name: str, db_type: str) -> dict:
+def create_database(name: str, db_type: str, description: str = "") -> dict:
     if db_type not in ("normal", "vector"):
         raise BadRequestError("type 必须是 normal 或 vector")
     _validate_name(name)
+    description = (description or "").strip()[:200]
 
     db_id = store.new_db_id(name)
     if os.path.exists(store.db_dir(db_id)):
@@ -173,6 +175,7 @@ def create_database(name: str, db_type: str) -> dict:
         "id": db_id,
         "name": name,
         "type": db_type,
+        "description": description,
         "createdAt": now,
         "updatedAt": now,
         "trashed": False,

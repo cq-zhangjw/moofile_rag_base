@@ -12,6 +12,7 @@ const { t, tm } = useI18n()
 const step = ref(1)
 const type = ref<'normal' | 'vector'>('normal')
 const name = ref('')
+const description = ref('')
 const submitting = ref(false)
 const existed = ref<string[]>([])
 
@@ -22,6 +23,7 @@ watch(
       step.value = 1
       type.value = 'normal'
       name.value = ''
+      description.value = ''
       existed.value = (await listDatabases()).map((d) => d.name)
     }
   }
@@ -47,7 +49,7 @@ const next = async () => {
 const submit = async () => {
   submitting.value = true
   try {
-    await createDatabase(name.value, type.value)
+    await createDatabase(name.value, type.value, description.value.trim())
     message.success(t('database.created'))
     emit('created')
     close()
@@ -92,6 +94,16 @@ const submit = async () => {
           <n-input v-model:value="name" :placeholder="t('wizard.namePlaceholder')" size="large" />
           <div v-if="nameError && name" style="font-size:12px;color:#DC2626;margin-top:4px;">{{ nameError }}</div>
         </n-form-item>
+        <n-form-item :label="t('wizard.description')">
+          <n-input
+            v-model:value="description"
+            type="textarea"
+            :rows="3"
+            :maxlength="200"
+            show-count
+            :placeholder="t('wizard.descriptionPlaceholder')"
+          />
+        </n-form-item>
       </n-form>
     </div>
 
@@ -103,6 +115,9 @@ const submit = async () => {
         </div>
         <div style="font-size:14px;color:#374151;margin-top:8px;">
           <span style="color:#6B7280;">{{ t('wizard.name') }}:</span> <span style="font-family:monospace;font-weight:600;">{{ name }}</span>
+        </div>
+        <div v-if="description.trim()" style="font-size:14px;color:#374151;margin-top:8px;">
+          <span style="color:#6B7280;">{{ t('wizard.description') }}:</span> {{ description.trim() }}
         </div>
         <div style="font-size:12px;color:#6B7280;margin-top:12px;">
           {{ t(type === 'vector' ? 'wizard.vectorSummary' : 'wizard.normalSummary') }}

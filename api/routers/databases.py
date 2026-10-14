@@ -15,7 +15,7 @@ def list_databases():
 
 @router.post("")
 def create_database(req: CreateDatabaseReq):
-    return responses.ok(db_service.create_database(req.name, req.type))
+    return responses.ok(db_service.create_database(req.name, req.type, req.description))
 
 
 @router.get("/{db_id}")

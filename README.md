@@ -79,6 +79,8 @@ Records inside `db.bson` are distinguished by `recordType`:
 
 - Create regular JSON databases and vector knowledge bases.
 - Database names are 2–64 English letters, digits, or underscores.
+- An optional database description (max 200 chars) can be set at creation to tell databases apart in the list and on the detail page.
+- The sidebar groups databases by type (vector knowledge bases / tables) and shows each description summary.
 - List databases with record/document counts, field counts, size, and update time.
 - Rename and soft-delete databases.
 - Restore databases from trash, permanently delete them, or empty the trash.
@@ -117,6 +119,7 @@ Records inside `db.bson` are distinguished by `recordType`:
 ### User interface
 
 - Responsive database sidebar and route-based database views.
+- The sidebar groups databases by type (vector knowledge bases / tables), shows a description summary under each name, and the detail page renders a description banner below the title.
 - Confirmation prompts for document, record, and batch deletion; lists and statistics refresh after mutations.
 - English, Simplified Chinese, and Japanese translations.
 - Locale selection priority: saved user preference, then browser language, then English.

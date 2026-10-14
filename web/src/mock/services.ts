@@ -27,10 +27,10 @@ export async function listDatabases(): Promise<DatabaseInfo[]> {
   return list
 }
 
-export async function createDatabase(name: string, type: 'normal' | 'vector'): Promise<DatabaseInfo> {
+export async function createDatabase(name: string, type: 'normal' | 'vector', description = ''): Promise<DatabaseInfo> {
   const d = await apiFetch('/api/databases', {
     method: 'POST',
-    body: JSON.stringify({ name, type }),
+    body: JSON.stringify({ name, type, description }),
   })
   return { ...d, id: d.id || d._id }
 }

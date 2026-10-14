@@ -87,6 +87,7 @@ moofile_base/
 | `id` | string | 库 ID，形如 `db_<name>_<8位hex>`，等于目录名 |
 | `name` | string | 库名（唯一；2–64 位英文字母、数字或下划线，前后端统一校验 `^[A-Za-z0-9_]{2,64}$`） |
 | `type` | string | `normal`（普通 JSON 库）\| `vector`（向量知识库） |
+| `description` | string | 库描述（创建时可选，最长 200 字；旧库缺省为空串） |
 | `createdAt` | string(ISO) | 创建时间 |
 | `updatedAt` | string(ISO) | 更新时间 |
 | `trashed` | bool | 是否在回收站 |
@@ -183,8 +184,8 @@ moofile_base/
 
 | 方法 | 路径 | 说明 | 请求/响应要点 |
 |------|------|------|------|
-| GET | `/api/databases` | 列出非回收站库 | `data`: `[{id,name,type,recordCount,documentCount,fieldCount,sizeMB,updatedAt,createdAt}]` |
-| POST | `/api/databases` | 创建库 | body `{name, type}`；同名 40901 |
+| GET | `/api/databases` | 列出非回收站库 | `data`: `[{id,name,type,description,recordCount,documentCount,fieldCount,sizeMB,updatedAt,createdAt}]` |
+| POST | `/api/databases` | 创建库 | body `{name, type, description?}`；description 可选、最长 200 字；同名 40901 |
 | GET | `/api/databases/{id}` | 库详情（含记录/文档/字段计数与大小） | |
 | PUT | `/api/databases/{id}` | 重命名 | body `{name}` |
 | DELETE | `/api/databases/{id}` | 软删除（`meta.json.trashed=true`） | |

@@ -112,7 +112,7 @@ const onRenamed = async (renamed: DatabaseInfo) => {
           <span class="group-label">{{ group.label }}</span>
           <span class="group-count">{{ group.items.length }}</span>
         </div>
-        <div v-show="!collapsed.has(group.key)">
+        <div v-show="!collapsed.has(group.key)" class="group-items">
           <div
             v-for="db in group.items"
             :key="db.id"
@@ -170,19 +170,20 @@ const onRenamed = async (renamed: DatabaseInfo) => {
   margin: 20px 0 8px 4px;
 }
 .db-group-title {
-  display: flex; align-items: center; gap: 4px;
-  font-size: 11px; color: #6B7280; font-weight: 600; letter-spacing: 0.03em;
-  margin: 12px 4px 4px; padding: 3px 6px; border-radius: 6px;
+  display: flex; align-items: center; gap: 5px;
+  font-size: 14px; color: #111827; font-weight: 600; letter-spacing: 0.01em;
+  margin: 14px 4px 6px; padding: 3px 6px; border-radius: 6px;
   cursor: pointer; user-select: none;
 }
-.db-group-title:first-child { margin-top: 8px; }
-.db-group-title:hover { color: #374151; background: #F3F4F6; }
-.group-caret { transition: transform 0.15s ease; flex-shrink: 0; }
+.db-group-title:first-child { margin-top: 10px; }
+.db-group-title:hover { background: #F3F4F6; }
+.group-caret { transition: transform 0.15s ease; flex-shrink: 0; color: #6B7280; }
 .group-caret.collapsed { transform: rotate(-90deg); }
 .group-count {
-  margin-left: auto; font-size: 10px; color: #9CA3AF; font-weight: 500;
-  background: #F3F4F6; border-radius: 8px; padding: 0 6px; line-height: 16px;
+  margin-left: auto; font-size: 11px; color: #6B7280; font-weight: 500;
+  background: #F3F4F6; border-radius: 8px; padding: 0 7px; line-height: 16px;
 }
+.group-items { padding-left: 21px; }
 .db-list { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
 .db-item {
   border-radius: 8px;
@@ -199,7 +200,7 @@ const onRenamed = async (renamed: DatabaseInfo) => {
   width: 3px; border-radius: 2px; background: #4F46E5;
 }
 .db-main { display: flex; align-items: center; gap: 8px; }
-.db-name { font-size: 14px; font-weight: 500; color: #111827; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.db-name { font-size: 13px; font-weight: 500; color: #111827; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .db-desc {
   margin-top: 3px; font-size: 12px; color: #6B7280; line-height: 1.4;
   overflow: hidden; text-overflow: ellipsis; display: -webkit-box;

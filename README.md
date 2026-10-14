@@ -4,6 +4,10 @@ MooFile RAG Base is a local-first database management and retrieval application.
 
 The project is intended for local development, evaluation, and small self-hosted deployments. Data, uploaded source files, task history, and vector embeddings remain on the local machine.
 
+![MooFile admin interface: grouped sidebar with database descriptions and database detail page](docs/imgs/overview.png)
+
+The screenshot above shows the main workspace: the left sidebar groups databases into **vector knowledge bases** and **tables** (collapsible, with a count badge), each row shows an optional description to tell databases apart, and the detail page renders the description as plain text under the title together with record/field/size statistics.
+
 ## Highlights
 
 - Manage regular JSON databases and vector knowledge bases.
